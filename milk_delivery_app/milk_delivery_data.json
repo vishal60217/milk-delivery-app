@@ -1,0 +1,21 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "vishal",
+      "password": "3e1d3b090c62e8011f3178c9be2a3620cfbf03a68e5d7ec2a0496792ccb1828d",
+      "created_at": "2026-03-31T17:16:40.072Z"
+    }
+  ],
+  "customers": [
+    {
+      "id": 1,
+      "name": "sufiyan",
+      "milk": "Cow",
+      "quantity": 1,
+      "price_per_liter": 50,
+      "total": 50,
+      "created_at": "2026-03-31T17:17:28.333Z"
+    }
+  ]
+}
