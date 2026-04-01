@@ -2,11 +2,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy from subfolder
-COPY milk_delivery_app/package*.json ./
+COPY package*.json ./
 RUN npm install
 
-COPY milk_delivery_app .
+COPY . .
 
 RUN npm run build
 
