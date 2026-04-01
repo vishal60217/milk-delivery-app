@@ -1,23 +1,15 @@
-# Use Node.js image
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json ./
-
-# Install dependencies
+# Copy from subfolder
+COPY milk_delivery_app/package*.json ./
 RUN npm install
 
-# Copy all files
-COPY . .
+COPY milk_delivery_app .
 
-# Build Next.js app
 RUN npm run build
 
-# Expose port
 EXPOSE 3000
 
-# Start app
 CMD ["npm", "start"]
