@@ -13,6 +13,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Build Docker image
-  run: docker build -t milk-app ./milk_delivery_app
+      run: docker build -t milk-app ./milk_delivery_app
+
     - name: Run container
       run: docker run -d -p 3000:3000 milk-app
