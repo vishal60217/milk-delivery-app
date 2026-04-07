@@ -1,56 +1,167 @@
-name: CI/CD Pipeline
+name: Frontend Backend Docker Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  APP_DIR: milk_delivery_app
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/milk-delivery-app
 
 jobs:
-  test:
+  frontend-backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIR }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: milk_delivery_app/package-lock.json
-    - name: Install dependencies
-      run: |
-        cd milk_delivery_app
-        npm ci
-    - name: Run unit tests
-      run: |
-        cd milk_delivery_app
-        npm run test
-    - name: Setup Chrome
-      uses: browser-actions/setup-chrome@v1
-    - name: Build Docker image
-      run: docker build . --file Dockerfile --tag test-image
-    - name: Run app in background
-      run: docker run -d -p 3000:3000 --name test-app test-image
-    - name: Wait for app to start
-      run: sleep 30
-    - name: Run e2e tests
-      run: |
-        cd milk_delivery_app
-        npm run test:e2e
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  build-and-deploy:
-    needs: test
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: milk_delivery_app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test -- --runInBand
+
+      - name: Run type check
+        run: npm run typecheck
+
+      - name: Build frontend and backend
+        run: npm run build
+
+  e2e-selenium:
     runs-on: ubuntu-latest
+    needs: frontend-backend
+    defaults:
+      run:
+        working-directory: ${{ env.APP_DIR }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/milk-delivery-app:latest
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: milk_delivery_app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Build app
+        run: npm run build
+
+      - name: Start app
+        run: |
+          npm run start -- --hostname 127.0.0.1 &
+          echo $! > next.pid
+
+      - name: Wait for app
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application did not become ready in time"
+          exit 1
+
+      - name: Run Selenium E2E tests
+        env:
+          APP_URL: http://127.0.0.1:3000
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: npm run test:e2e -- --runInBand
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -f next.pid ]; then
+            kill "$(cat next.pid)" || true
+          fi
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [frontend-backend, e2e-selenium]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_REGISTRY_USERNAME: ${{ secrets.DEPLOY_REGISTRY_USERNAME }}
+      DEPLOY_REGISTRY_TOKEN: ${{ secrets.DEPLOY_REGISTRY_TOKEN }}
+    steps:
+      - name: Skip deploy when secrets are missing
+        if: env.DEPLOY_HOST == '' || env.DEPLOY_USERNAME == '' || env.DEPLOY_SSH_KEY == '' || env.DEPLOY_REGISTRY_USERNAME == '' || env.DEPLOY_REGISTRY_TOKEN == ''
+        run: echo "Deploy secrets are not configured. Skipping remote deployment."
+
+      - name: Deploy on remote Docker host
+        if: env.DEPLOY_HOST != '' && env.DEPLOY_USERNAME != '' && env.DEPLOY_SSH_KEY != '' && env.DEPLOY_REGISTRY_USERNAME != '' && env.DEPLOY_REGISTRY_TOKEN != ''
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USERNAME }}
+          key: ${{ env.DEPLOY_SSH_KEY }}
+          script: |
+            docker login ghcr.io -u ${{ env.DEPLOY_REGISTRY_USERNAME }} -p ${{ env.DEPLOY_REGISTRY_TOKEN }}
+            docker pull ${{ env.IMAGE_NAME }}:latest
+            docker stop milk-delivery-app || true
+            docker rm milk-delivery-app || true
+            docker run -d --name milk-delivery-app --restart unless-stopped -p 3000:3000 ${{ env.IMAGE_NAME }}:latest

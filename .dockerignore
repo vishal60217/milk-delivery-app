@@ -1,0 +1,9 @@
+.git
+.github
+.vs
+node_modules
+milk_delivery_app/node_modules
+milk_delivery_app/.next
+milk_delivery_app/coverage
+milk_delivery_app/tsconfig.tsbuildinfo
+npm-debug.log*

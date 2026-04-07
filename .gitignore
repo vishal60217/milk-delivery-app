@@ -7,6 +7,8 @@ yarn-error.log*
 # Next.js
 .next/
 out/
+.swc/
+*.tsbuildinfo
 
 # Production
 build/
@@ -29,5 +31,3 @@ Thumbs.db
 # Testing
 coverage/
 
-# Docker
-.dockerignore

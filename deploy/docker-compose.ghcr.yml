@@ -1,0 +1,7 @@
+services:
+  milk-delivery-app:
+    image: ghcr.io/your-github-user-or-org/milk-delivery-app:latest
+    container_name: milk-delivery-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
