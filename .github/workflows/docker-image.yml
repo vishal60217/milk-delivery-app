@@ -60,30 +60,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chrome
-        id: setup-chrome
-        uses: browser-actions/setup-chrome@v1
-
-      - name: Install matching ChromeDriver
-        shell: bash
-        env:
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+      - name: Print browser versions
         run: |
-          CHROME_VERSION="$("$CHROME_BIN" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')"
-          CHROME_MAJOR="${CHROME_VERSION%%.*}"
-          DRIVER_URL="$(curl -fsSL "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | python3 -c "import json, sys; major='${CHROME_MAJOR}.'; data=json.load(sys.stdin); versions=data.get('versions', []); matches=[v for v in versions if v.get('version', '').startswith(major)]; 
-for version in reversed(matches):
-    for download in version.get('downloads', {}).get('chromedriver', []):
-        if download.get('platform') == 'linux64':
-            print(download['url'])
-            raise SystemExit(0)
-raise SystemExit('No matching ChromeDriver download found')")"
-          echo "Using Chrome version: $CHROME_VERSION"
-          echo "Using ChromeDriver URL: $DRIVER_URL"
-          wget -q "$DRIVER_URL"
-          unzip -q chromedriver-linux64.zip
-          chmod +x chromedriver-linux64/chromedriver
-          echo "CHROMEDRIVER_PATH=$PWD/chromedriver-linux64/chromedriver" >> "$GITHUB_ENV"
+          google-chrome --version || chromium-browser --version || chromium --version || true
+          chromedriver --version || true
 
       - name: Build app
         run: npm run build
@@ -107,8 +87,6 @@ raise SystemExit('No matching ChromeDriver download found')")"
       - name: Run Selenium E2E tests
         env:
           APP_URL: http://127.0.0.1:3000
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          CHROMEDRIVER_PATH: ${{ env.CHROMEDRIVER_PATH }}
         run: npm run test:e2e -- --runInBand
 
       - name: Stop app
