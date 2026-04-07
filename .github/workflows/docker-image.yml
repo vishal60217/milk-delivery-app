@@ -71,10 +71,10 @@ jobs:
         run: |
           CHROME_VERSION="$("$CHROME_BIN" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')"
           CHROME_MAJOR="${CHROME_VERSION%%.*}"
-          DRIVER_VERSION="$(curl -fsSL "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_MAJOR}")"
+          DRIVER_URL="$(node -e "const https=require('https'); const major=process.env.CHROME_MAJOR; https.get('https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json', res => { let data=''; res.on('data', chunk => data += chunk); res.on('end', () => { const json = JSON.parse(data); const match = [...json.versions].reverse().find(version => version.version.startsWith(major + '.') && version.downloads && version.downloads.chromedriver); const download = match && match.downloads.chromedriver.find(entry => entry.platform === 'linux64'); if (!download) { console.error('No matching ChromeDriver download found for major', major); process.exit(1); } process.stdout.write(download.url); }); }).on('error', err => { console.error(err); process.exit(1); });")"
           echo "Using Chrome version: $CHROME_VERSION"
-          echo "Using ChromeDriver version: $DRIVER_VERSION"
-          wget -q "https://storage.googleapis.com/chrome-for-testing-public/${DRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+          echo "Using ChromeDriver URL: $DRIVER_URL"
+          wget -q "$DRIVER_URL"
           unzip -q chromedriver-linux64.zip
           chmod +x chromedriver-linux64/chromedriver
           echo "CHROMEDRIVER_PATH=$PWD/chromedriver-linux64/chromedriver" >> "$GITHUB_ENV"
