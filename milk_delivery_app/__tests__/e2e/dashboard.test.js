@@ -16,9 +16,14 @@ describe('Milk Delivery App E2E', () => {
       options.setChromeBinaryPath(process.env.CHROME_BIN);
     }
 
+    const serviceBuilder = process.env.CHROMEDRIVER_PATH
+      ? new chrome.ServiceBuilder(process.env.CHROMEDRIVER_PATH)
+      : undefined;
+
     driver = await new Builder()
       .forBrowser('chrome')
       .setChromeOptions(options)
+      .setChromeService(serviceBuilder)
       .build();
   });
 

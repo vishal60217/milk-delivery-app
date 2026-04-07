@@ -64,6 +64,12 @@ jobs:
         id: setup-chrome
         uses: browser-actions/setup-chrome@v1
 
+      - name: Install matching ChromeDriver
+        id: setup-chromedriver
+        uses: nanasess/setup-chromedriver@v2
+        with:
+          chromeapp: ${{ steps.setup-chrome.outputs.chrome-path }}
+
       - name: Build app
         run: npm run build
 
@@ -87,6 +93,7 @@ jobs:
         env:
           APP_URL: http://127.0.0.1:3000
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chromedriver.outputs.chromedriver-path }}
         run: npm run test:e2e -- --runInBand
 
       - name: Stop app
