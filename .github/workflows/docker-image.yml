@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,12 +7,50 @@ on:
     branches: [ "main" ]
 
 jobs:
-
-  build:
-
+  test:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: milk_delivery_app/package-lock.json
+    - name: Install dependencies
+      run: |
+        cd milk_delivery_app
+        npm ci
+    - name: Run unit tests
+      run: |
+        cd milk_delivery_app
+        npm run test
+    - name: Setup Chrome
+      uses: browser-actions/setup-chrome@v1
+    - name: Build Docker image
+      run: docker build . --file Dockerfile --tag test-image
+    - name: Run app in background
+      run: docker run -d -p 3000:3000 --name test-app test-image
+    - name: Wait for app to start
+      run: sleep 30
+    - name: Run e2e tests
+      run: |
+        cd milk_delivery_app
+        npm run test:e2e
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_USERNAME }}/milk-delivery-app:latest
